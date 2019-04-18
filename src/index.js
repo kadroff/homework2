@@ -1,60 +1,88 @@
 import "babel-polyfill";
 import Chart from "chart.js";
 
-const currencyURL = "www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
-// const meteoURL = "/xml.meteoservice.ru/export/gismeteo/point/140.xml";
+const meteoURL = "xml.meteoservice.ru/export/gismeteo/point/140.xml";
 
 async function loadCurrency() {
-  const response = await fetch(currencyURL);
+  const response = await fetch(meteoURL);
   const xmlTest = await response.text();
   const parser = new DOMParser();
   const currencyData = parser.parseFromString(xmlTest, "text/xml");
-  // <Cube currency="USD" rate="1.1321" />
-  const rates = currencyData.querySelectorAll("Cube[currency][rate]");
-  const result = Object.create(null);
-  for (let i = 0; i < rates.length; i++) {
-    const rateTag = rates.item(i);
-    const rate = rateTag.getAttribute("rate");
-    const currency = rateTag.getAttribute("currency");
-    result[currency] = rate;
-  }
-  result["EUR"] = 1;
-  // result["RANDOM"] = 1 + Math.random();
-  return result;
-}
+  const hours = currencyData.querySelectorAll("FORECAST[hour]");
+  const temperatures = currencyData.querySelectorAll("TEMPERATURE[max][min]");
+  const heats = currencyData.querySelectorAll("HEAT[max][min]");
+  const resultTemp = Object.create(null);
+  const resultHeat = Object.create(null);
+  for (let i = 0; i < temperatures.length; i++) {
+    const HoursTag = hours[i];
 
-function normalizeDataByCurrency(data, currency) {
-  const result = Object.create(null);
-  const value = data[currency];
-  for (const key of Object.keys(data)) {
-    result[key] = value / data[key];
+    const TemperaturesTag = temperatures[i];
+    const temperatureMax = parseInt(TemperaturesTag.getAttribute("max"));
+    const temperatureMin = parseInt(TemperaturesTag.getAttribute("min"));
+    const temperature = temperatureMin + (temperatureMax - temperatureMin) / 2;
+
+    const HeatsTag = heats[i];
+    const heatMax = parseInt(HeatsTag.getAttribute("max"));
+    const heatMin = parseInt(HeatsTag.getAttribute("min"));
+    const heat = heatMin + (heatMax - heatMin) / 2;
+    const hour = HoursTag.getAttribute("hour");
+
+    resultTemp[hour] = temperature;
+    resultHeat[hour] = heat;
   }
-  return result;
+  return [resultTemp, resultHeat];
 }
 
 const buttonBuild = document.getElementById("btn");
 const canvasCtx = document.getElementById("out").getContext("2d");
 buttonBuild.addEventListener("click", async function() {
   const currencyData = await loadCurrency();
-  const normalData = normalizeDataByCurrency(currencyData, "RUB");
-  const keys = Object.keys(normalData).sort((k1, k2) =>
-    compare(normalData[k1], normalData[k2])
-  );
-  const plotData = keys.map(key => normalData[key]);
+  const keysTemp = Object.keys(currencyData[0]);
+  const keysHeat = Object.keys(currencyData[1]);
+  const plotData = keysTemp.map(key => currencyData[0][key]);
+  const heatData = keysHeat.map(key => currencyData[1][key]);
 
   const chartConfig = {
     type: "line",
 
     data: {
-      labels: keys,
+      labels: keysTemp,
       datasets: [
         {
-          label: "Стоимость валюты в рублях",
-          backgroundColor: "rgb(255, 20, 20)",
+          label: "Температура",
+          fill: true,
+          backgroundColor: "rgba(196, 93, 105, 0.3)",
           borderColor: "rgb(180, 0, 0)",
           data: plotData
+        },
+        {
+          label: "Температура по ощущениям",
+          fill: true,
+          backgroundColor: "rgb(0, 255, 128, 0.3)",
+          borderColor: "rgb(64, 255, 0)",
+          data: heatData
         }
       ]
+    },
+    options: {
+      scales: {
+        xAxes: [
+          {
+            scaleLabel: {
+              display: true,
+              labelString: "Время"
+            }
+          }
+        ],
+        yAxes: [
+          {
+            scaleLabel: {
+              display: true,
+              labelString: "Температура, °C"
+            }
+          }
+        ]
+      }
     }
   };
 
@@ -69,9 +97,3 @@ buttonBuild.addEventListener("click", async function() {
     window.chart = new Chart(canvasCtx, chartConfig);
   }
 });
-
-function compare(a, b) {
-  if (a > b) return 1;
-  if (a < b) return -1;
-  return 0;
-}
