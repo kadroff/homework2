@@ -3,18 +3,19 @@ import Chart from "chart.js";
 
 const meteoURL = "xml.meteoservice.ru/export/gismeteo/point/140.xml";
 
-async function loadCurrency() {
+async function parseData() {
   const response = await fetch(meteoURL);
   const xmlTest = await response.text();
   const parser = new DOMParser();
-  const currencyData = parser.parseFromString(xmlTest, "text/xml");
-  const hours = currencyData.querySelectorAll("FORECAST[hour]");
-  const temperatures = currencyData.querySelectorAll("TEMPERATURE[max][min]");
-  const heats = currencyData.querySelectorAll("HEAT[max][min]");
+  const weatherData = parser.parseFromString(xmlTest, "text/xml");
+  const hours = weatherData.querySelectorAll("FORECAST[hour]");
+  const temperatures = weatherData.querySelectorAll("TEMPERATURE[max][min]");
+  const heats = weatherData.querySelectorAll("HEAT[max][min]");
   const resultTemp = Object.create(null);
   const resultHeat = Object.create(null);
-  for (let i = 0; i < temperatures.length; i++) {
+  for (let i = 0; i < hours.length; i++) {
     const HoursTag = hours[i];
+    const hour = HoursTag.getAttribute("hour");
 
     const TemperaturesTag = temperatures[i];
     const temperatureMax = parseInt(TemperaturesTag.getAttribute("max"));
@@ -25,7 +26,6 @@ async function loadCurrency() {
     const heatMax = parseInt(HeatsTag.getAttribute("max"));
     const heatMin = parseInt(HeatsTag.getAttribute("min"));
     const heat = heatMin + (heatMax - heatMin) / 2;
-    const hour = HoursTag.getAttribute("hour");
 
     resultTemp[hour] = temperature;
     resultHeat[hour] = heat;
@@ -36,11 +36,11 @@ async function loadCurrency() {
 const buttonBuild = document.getElementById("btn");
 const canvasCtx = document.getElementById("out").getContext("2d");
 buttonBuild.addEventListener("click", async function() {
-  const currencyData = await loadCurrency();
-  const keysTemp = Object.keys(currencyData[0]);
-  const keysHeat = Object.keys(currencyData[1]);
-  const plotData = keysTemp.map(key => currencyData[0][key]);
-  const heatData = keysHeat.map(key => currencyData[1][key]);
+  const weatherData = await parseData();
+  const keysTemp = Object.keys(weatherData[0]);
+  const keysHeat = Object.keys(weatherData[1]);
+  const tempData = keysTemp.map(key => weatherData[0][key]);
+  const heatData = keysHeat.map(key => weatherData[1][key]);
 
   const chartConfig = {
     type: "line",
@@ -53,7 +53,7 @@ buttonBuild.addEventListener("click", async function() {
           fill: true,
           backgroundColor: "rgba(196, 93, 105, 0.3)",
           borderColor: "rgb(180, 0, 0)",
-          data: plotData
+          data: tempData
         },
         {
           label: "Температура по ощущениям",
